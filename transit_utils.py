@@ -238,3 +238,5 @@ def invert_fft(fft, fft_mag, bound):
     
     #Returns: complex ndarray (inverse reduced-degree FFT restoration) inverse
     return inverse
+
+print("All functions loaded successfully.")
