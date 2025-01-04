@@ -1,15 +1,20 @@
 # astro_tools
-## Prject Description
+## Project Description
 A compilation of experimental Python tools for handling astrophysical data. The current contents comprise a pipeline for identifying circumbinary exoplanet transits in light curve data from Kepler. More projects will be added as time passes.
 
 ## Features
+- Cleans, detrends and searches for exoplanet transit signals in a given eclipsing binary's light curve.
+- Processes light curve catalogs and flags systems with signs of exoplanet transits.
 
 ## Installation
-Best results with Python 3.10 to ensure compatibility of Metal GPU functionality if on an Apple device. 
+Best results with Python 3.10 to ensure compatibility of Metal GPU functionality if on an Apple device.
+For dependencies, see requirements.txt.
 
 ## Use
-Provide the Kepler Input Catalog number of a target star(s).
-Use provided notebooks for data visualisation & analysis.
+Two use cases are currently possible:
+
+- Provide the Kepler Input Catalog number of a target star into prefold_automated first cell. Run the first three cells, which comprise the complete pipeline.
+- Design a set of input filters into the fourth cell to run a restricted survey of the keplerebs catalog.
 
 ## File Structure
 ### 100K_foldless_trainingdata.npz
