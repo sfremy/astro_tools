@@ -34,7 +34,7 @@ Python notebook containing full pipeline for dowloading, detrending, & processin
 - Identifying possible planetary transits using CNN
   
 ### transit_utils.py
-Some streamlining functions for non-model pipeline elements. (Under review)
+Time series handling functions for non-CNN pipeline steps.
 
 ## Contributions
 
