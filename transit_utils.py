@@ -1,7 +1,11 @@
+print("Importing dependencies...")
+
 import torch
 import numpy as np
 import lightkurve as lk
 import tensorflow as tf
+
+print("Loading functions...")
 
 def pytorch_fold_and_bin(time, flux, period, n_bins, t0=0.0, device='cpu'):
     """
