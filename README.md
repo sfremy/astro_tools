@@ -39,6 +39,7 @@ Some streamlining functions for non-model pipeline elements. (Under review)
 ## Contributions
 
 ## License
+This project is licensed under the terms of the MIT license.
 
 ## Acknowledgements
 Many thanks to Ming Liu for helping with formulation and debug.
