@@ -1,236 +1,203 @@
-import os
-import matplotlib.pyplot as plt
-import numpy as np
-import lightkurve as lk
-import pandas
+def pytorch_fold_and_bin(time, flux, period, n_bins, t0=0.0, device='cpu'):
+    """
+    Folds a time-series dataset at a single period and bins the folded data into equal-sized bins.
 
+    Args:
+        time (array): Array of time values.
+        flux (array): Array of flux values corresponding to `time`.
+        period (float): Period at which to fold the data.
+        n_bins (int): Number of bins for the folded data.
+        t0 (float): Reference time for folding.
+        device (str): Device to use ('cpu' or 'cuda').
 
-#TRANSIT GENERATION
-def make_transit(t0, period, duration, depth, ratio, resolution=1/192):
-    #t0: the coordinate of the transit with respect to the period window.
-    #period: the period of the planet, in days.
-    #duration: the length of the transit, in days.
-    #depth: the depth of the transit with respect to the star's luminosity, from 0-1.
-    #ratio: the ratio of sizes between the planet and the star, from 0-1.
-    #resolution: the number of points per day
-    
-    
-    #final 30min resolution (0.25x)
-    one_period_time = np.arange(0, period, resolution)
+    Returns:
+        np.ndarray: Binned averages of the folded light curve.
+    """
+    with torch.no_grad():
+        # Filter valid (finite) data points
+        valid_indices = np.isfinite(time) & np.isfinite(flux)
+        time = time[valid_indices]
+        flux = flux[valid_indices]
 
-    ab = duration * (1 - ratio) / 2
-    bc = duration * ratio
+        # Ensure array length is compatible with binning
+        points_per_bin = len(time) // n_bins
+        resize_length = n_bins * points_per_bin
+        time = time[:resize_length]
+        flux = flux[:resize_length]
 
-    # Make x,y (time, flux) positions for each trapezoid marker
-    a = [0, 1]
-    b = [ab, 1 - depth]
-    c = [ab + bc, 1 - depth]
-    d = [duration, 1]
+        # Convert data to PyTorch tensors
+        tensor_args = dict(dtype=torch.float32, device=device)
+        time_tensor = torch.as_tensor(time - t0, **tensor_args)  # Center time around t0
+        flux_tensor = torch.as_tensor(flux, dtype=torch.float64, device=device)
 
-    x = np.array([a[0], b[0], c[0], d[0]])
-    y = [a[1], b[1], c[1], d[1]]
+        # Compute phase for folding
+        period_tensor = torch.tensor(period, **tensor_args)
+        phase = (time_tensor / period_tensor + 0.5) % 1.0
 
-    #reshape the array, take the mean on an axis
-    one_period_flux = np.interp(one_period_time, x+t0, y)   
-    
-    #one_period_flux: an array containing the generated flux values.
-    return one_period_flux   
-    
-def transit_full(time, period, dur, depth, ratio, t0_spread=5, dur_spread=0.002, depth_spread=0.002,
-                 tprob=0.7, t2prob=0.4, binsize=4, snr=10, fluxratio=1):
-    #time: the size of the simulated lightcurve, in days.
-    #period: the period of the planet, in days.
-    #dur: the duration of the transit, in days.
-    #depth: the depth of the transit with respect to the normal luminosity, from 0-1.
-    #ratio: the ratio between the sizes of the planet and star, from 0-1.
-    #t0_spread: the scatter in t0 between transits, in days.
-    #dur_spread: the scatter in transit duration.
-    #depth_spread: the scatter in transit depth.
-    #tprob: the probability of a successful transit.
-    #t2prob: the probability of a transit of the secondary star.
-    #binsize: the size of bins, in datapoints.
-    #snr: the signal-to-noise ratio, from 0-1.
-    #fluxratio: the luminosity ratio between the primary and secondary stars.
-    
-    #Setup output and determine the number of periods.
-    fulltransitcurve = []
-    twindow = np.zeros(int(np.ceil(time/period)))
-    np.random.default_rng()
+        # Sort flux values by phase
+        sorted_indices = torch.argsort(phase)
+        sorted_flux = flux_tensor[sorted_indices]
 
-    for i in range(0,int(np.ceil(time/period))):
-        t_insert = np.random.uniform(0,1)
+        # Bin the sorted flux values using convolution
+        kernel = torch.ones((1, 1, 1, points_per_bin), dtype=torch.float64, device=device)
+        binned_flux = torch.nn.functional.conv2d(
+            sorted_flux.unsqueeze(0).unsqueeze(0),
+            kernel,
+            stride=(1, points_per_bin),
+            padding=0
+        )[0, 0]
+
+        # Normalize by the number of points per bin
+        binned_flux /= points_per_bin
+
+        # Convert result to NumPy and return
+        return binned_flux.cpu().numpy()
         
-        #Generate randomised parameters for a transit injection
-        if t_insert < tprob:
-            t0_instance = period/2 + np.random.normal(0,t0_spread)
-            dur_instance = np.random.normal(dur,dur_spread)
-            depth_instance = np.random.normal(depth,depth_spread)
-            tinstance = make_transit(t0_instance,period,dur_instance,depth_instance,ratio)
-            
-            #Generate parameters for a secondary transit
-            if t_insert < t2prob:
-                t2t0 = t0_instance + np.random.uniform(-5.0,5.0)
-                t2 = make_transit(t2t0,period,dur_instance,depth_instance*fluxratio,ratio)
-                tinstance = tinstance+t2-1
-            
-            fulltransitcurve += tinstance.tolist()
+def load_and_clean(kic, eb_df):
+    """
+    Retrieves light curve and associated parameters of a Kepler target using the Kepler archive and MAST keplerebs record.
 
-        #Skip a failed transit (precession shifts planet out of transit window)
-        else:
-            fulltransitcurve += [1.0]*int(period*192-1)
+    Parameters:
+        kic (int): Kepler Input Catalog index of the target.
+        eb_df (DataFrame): DataFrame containing eclipsing binary parameters, including period and primary eclipse times.
 
-    #Add noise with the specified SNR
-    sigma = depth * np.sqrt(dur) / snr #mark for review
-    noise = np.random.normal(0.0, sigma, len(fulltransitcurve))
-            
-    fulltransitcurve += noise
-    
-    #Bin the synthesized light curve to the specified resolution
-    n = -(len(fulltransitcurve)%binsize)
-    if n == 0:
-        tcarray = np.array(fulltransitcurve)
-    else:
-        tcarray = np.array(fulltransitcurve[:n])
-    tcarray = tcarray.reshape(np.int(len(tcarray)/binsize),binsize)
-    finallc = np.mean(tcarray,axis=1)
-    
-#     #Fold the simulated light curve
-#     finalt = np.arange(0,len(finallc))
-#     flc = lk.LightCurve(time=finalt,flux=finallc)
-#     flcfolded = flc.fold(epoch_time=t0_instance,period=period).bin(bins=1000) #mark for review
-    
-    
-    #finallc: the final simulated lightcurve, with 1 point each 30 minutes.
-    return finallc
+    Returns:
+        lc (LightCurve): Cleaned light curve as a LightKurve object.
+        t (np.ndarray): Target time series.
+        f (np.ndarray): Target flux intensity.
+        ferr (np.ndarray): Target measurement uncertainty.
+        p (float): Target eclipsing binary period in days.
+        t0_1 (float): BKJD position of the primary eclipse in days.
+    """
+    # Load light curve
+    search_result = lk.search_lightcurve(f'KIC {kic}', author='Kepler', exptime=1800)
+    lc_collection = search_result.download_all(quality_bitmask="hard")
+    lc_stitch = lc_collection.stitch()
+    lc = lc_stitch.remove_nans()
 
-def make_negative(time, sigma):
-    #time: the size of the light curve array desired, in days.
-    #sigma: the spread of the gaussian noise distribution.
-    
-    noisearray = np.random.normal(1.0, sigma, int(time*48)-1)
-    
-    #noisearray: the specified gaussian noise-only array. Assume 1 point = 30 minutes (it doesn't actually matter what the resolution is).
-    return noisearray
+    # Retrieve binary parameters
+    params = eb_df.loc[eb_df['#KIC'] == kic]
+    p = params['period'].item()
+    t0_1 = params['bjd0'].item() - 54833
 
+    # Clean flux values using 5-sigma clipping
+    f = lc.flux.value
+    clip_limit = 1 + 5 * np.std(f)
+    mask = np.abs(f) < clip_limit
+    t = lc.time.bkjd[mask]
+    f = f[mask]
+    ferr = lc.flux_err.value[mask]
 
+    return lc, t, f, ferr, p, t0_1
 
+def get_parameters(t, f, p, t0_1):
+    """
+    Retrieves orbital parameters (duration, t0) for both components of an eclipsing binary.
 
-#ANTICLIPPING / POST-FOLD DATA PROCESSING & EXTRACTION
-def anticlip_data(view, low_sigma, high_sigma):
-    # view: the original lightcurve array to be investigated.
-    # low_sigma: the significance of a point needed to exceed the anticlip threshold.
-    # high_sigma: the significance of a point needed to pass normal sigma clipping.
-    
+    Parameters:
+        t (np.ndarray): Target time series.
+        f (np.ndarray): Target flux intensity.
+        p (float): Target eclipsing binary period in days.
+        t0_1 (float): BKJD position of the primary eclipse.
 
-    median = np.median(view)
-    sigma = np.std(view)
-    indexes = []
-    clipped_view = []
-    
-    upper_limit = median + high_sigma * sigma
+    Returns:
+        dur_prim (float): Duration of the primary eclipse in days.
+        dur_sec (float or None): Duration of the secondary eclipse in days. None if no secondary is detected.
+        t0_2 (float or None): BKJD position of the secondary eclipse. None if no secondary is detected.
+    """
+    num = int(p * 48)  # Number of bins for folding
+    sample_fold = pytorch_fold_and_bin(t, f, p, num, t0=t0_1 + p / 4, device='cpu')
+    gradient = np.gradient(np.gradient(sample_fold))
 
-    for i in range(len(view)):
-        if (view[i] <= upper_limit):
-            clipped_view.append(view[i])
-        else:
-            clipped_view.append(1)
+    # Extract primary and secondary eclipse indices
+    idx1, idx2 = np.argpartition(gradient[:num // 2], 1)[:2]
+    sec = gradient[num // 2:]
+    idx3, idx4 = np.argpartition(sec, 1)[:2] + num // 2
 
-    median_new = np.median(clipped_view)
-    sigma_new = np.std(clipped_view)
-    lower_limit = median - low_sigma * sigma
-    
-    for i in range(len(clipped_view)):
-        if (clipped_view[i] <= lower_limit):
-            indexes.append(i)
-            
-    # indexes: the positions of points >n_sigma * sigma below the median.
-    # clipped_view: the values of points >n_sigma * sigma below the median.
-    return indexes, clipped_view
+    # Calculate durations and secondary eclipse parameters
+    dur_prim = (np.abs(idx1 - idx2) + 22) / 48
+    dur_sec = (np.abs(idx3 - idx4) + 22) / 48
+    t0_2 = t0_1 + ((idx4 + idx3) - (idx2 + idx1)) / 96
 
+    # Filter out grazing binaries
+    if sec[idx3 - num // 2] > (-3 * np.std(sec)):
+        return dur_prim, None, None
 
-def find_clusters(view, indexes, spacing, min_cluster):
-    #view: the original lightcurve array to be investigated.
-    #indexes: the array of all outliers identified by anticlip_data.
-    #spacing: the maximum allowed datapoint gap size within a cluster.
-    #min_cluster: the minimum size of a cluster of significant outliers, in datapoints.
-    
-    cl = []
-    clusters = []
-    clusterflux = np.full((len(view)), None)
-    
-    i = 0
-    while(i < len(indexes)):
-        cl.append(int(indexes[i]))
-        i+=1
-        if (i < len(indexes)):
-            while(indexes[i] <= indexes[i-1] + spacing):
-                cl.append(int(indexes[i]))
-                i+=1
-                if (i >= len(indexes)):
-                    break
-        if (len(cl) >= int(min_cluster)):
-            clusters = np.append(clusters,cl)
-        cl = []
-        
-        
-    for index in clusters:
-        clusterflux[int(index)] = view[int(index)]
-    
-    #clusterflux: a full-length array of NoneType with the correct flux values placed at the correct indices.
-    return clusters, clusterflux
+    return dur_prim, dur_sec, t0_2
 
-def fold_anticlip(t, f, clusters, p, t0, nbins, cliplength):
-    # t is the time array.
-    # f is the flux value array.
-    #p is the period in DATAPOINTS.
-    # nbins is the number of desired bins across the period.
-    # clusters is an array containing only cluster flux values.
-    #cliplength is the radius around t0 in which points are to be retained.
-    
-    assert len(t) == len(f) == len(clusters), 'time, flux, clusters arrays must have the same lengths'
+def find_transits(time_norm, flux_norm, model, proc_hardware_name):
+    """
+    Uses an external convolutional neural network to search a detrended light curve for planetary transits.
 
-    folded_lc = []
-    phi = ((t - t0 + cliplength*0.5) / p) % 1
-    bin_idxs = np.digitize(phi,np.linspace(0,1,nbins)) #Numpy digitize
-    
-    bin_id_clip = bin_idxs < cliplength / (p/nbins)
-    
-    bin_idxs = bin_idxs[bin_id_clip]
-    f = f[bin_id_clip]
-    clusters = clusters[bin_id_clip]
-    
-    fluxassigned = np.column_stack((bin_idxs,f,clusters))
-    
-    df = pandas.DataFrame(fluxassigned,columns=['Index','Flux','Cluster']).groupby('Index').mean()
-    
-    df.Cluster.fillna(df.Flux, inplace=True)
-    
-    fold_flux=df.iloc[:,1:].values
-    
-    fold_flux = fold_flux.transpose()[0]
-    
-    return fold_flux
+    Parameters:
+        time_norm (np.ndarray): Detrended target time series.
+        flux_norm (np.ndarray): Detrended target flux intensity.
+        model (tf.keras.Model): Pre-trained CNN model for transit detection.
+        proc_hardware_name (str): Hardware configuration for TensorFlow (e.g., '/cpu:0' or '/gpu:0').
 
-def transit_extraction(view, cluster_list, rangelength):
-    #view: the full lightcurve array to be processed.
-    #clist: the array of cluster indices extracted with find_clusters.
-    #rangelength: the selection DIAMETER of each cluster, in days.
-    
-    cluster_array = []
-    cindices = []
-    clist = cluster_list.astype(int)
-    
-    for i in range(len(clist)-1):
-        if clist[i - 1] != clist[i]-1 and clist[i] > rangelength*24 and clist[i] < len(view)-rangelength*24:
-            cluster = []
-            for j in range(clist[i]-rangelength*24, clist[i]+rangelength*24):
-                cluster = np.append(cluster, view[j])
-            cluster_array.append(cluster)
-            cindices.append(clist[i]-rangelength*24)
-        
-    if cluster_array != []:
-        cluster_extract = np.vstack(cluster_array)
-    else:
-        cluster_extract = []
-    
-    return cluster_extract, cindices
+    Returns:
+        segment_times (np.ndarray): Time indices of detected transits.
+        y_pred (np.ndarray): Model confidence scores for each segment.
+        sample_matrix (np.ndarray): Array of sample segments for model input.
+    """
+    segment_times = []
+    segment_transform = []
+
+    # Divide light curve into 240-point segments
+    for i in range(len(flux_norm) // 240):
+        segment = flux_norm[240 * i:240 * (i + 1)]
+        segment_times.append(time_norm[240 * i])
+        sigma = np.std(segment)
+        segment_transform.append((1 - segment) / (2 * sigma))
+
+    # Prepare input for the CNN
+    sample_matrix = np.array(segment_transform).reshape(-1, 240, 1)
+
+    # Predict transit probabilities
+    with tf.device(proc_hardware_name):
+        y_pred = model.predict(sample_matrix).flatten()
+
+    return np.array(segment_times), y_pred, sample_matrix
+
+def split_lc(time, flux, other_arrs=None, time_gap_delta=0.75, flux_gap_delta=0.05, min_chunk_len=30, verbose=False):
+    """
+    Splits light curve into segments based on data gaps.
+
+    Parameters:
+        time (np.ndarray): Target time series.
+        flux (np.ndarray): Target flux intensity.
+        other_arrs (list of np.ndarray, optional): Additional arrays to split. Defaults to None.
+        time_gap_delta (float): Maximum allowable time gap in days.
+        flux_gap_delta (float): Maximum allowable flux gap.
+        min_chunk_len (int): Minimum chunk length in data points.
+        verbose (bool): Whether to print debugging information.
+
+    Returns:
+        tuple: Split time, flux, and other arrays.
+    """
+    other_arrs = other_arrs or []
+
+    # Eliminate NaNs
+    valid_mask = np.isfinite(time) & np.isfinite(flux)
+    time_clean, flux_clean = time[valid_mask], flux[valid_mask]
+    other_clean = [arr[valid_mask] for arr in other_arrs]
+
+    # Identify gap indices
+    dt, df = np.abs(np.diff(time_clean)), np.abs(np.diff(flux_clean))
+    split_ixs = np.where((dt > time_gap_delta) | (df > flux_gap_delta))[0] + 1
+
+    if verbose:
+        print(f"Time gaps: {np.count_nonzero(dt > time_gap_delta)}, Flux gaps: {np.count_nonzero(df > flux_gap_delta)}")
+
+    # Split arrays
+    time_chunks = np.split(time_clean, split_ixs)
+    flux_chunks = np.split(flux_clean, split_ixs)
+    other_chunks = [np.split(arr, split_ixs) for arr in other_clean]
+
+    # Filter short chunks
+    valid_chunks = [len(chunk) >= min_chunk_len for chunk in time_chunks]
+    time_chunks = np.array(time_chunks, dtype=object)[valid_chunks]
+    flux_chunks = np.array(flux_chunks, dtype=object)[valid_chunks]
+    other_chunks = [[chunk for chunk, valid in zip(chunks, valid_chunks) if valid] for chunks in other_chunks]
+
+    return time_chunks, flux_chunks, other_chunks
