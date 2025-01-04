@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# Virtual environments
+env/
+venv/
+*.env
+
+# VSCode
+.vscode/
+*.code-workspace
+
+# Logs and caches
+*.log
+.cache/
+*.sqlite
+*.tmp
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# macOS
+.DS_Store
+
+# Python version manager
+.python-version
+
+# PyCharm
+.idea/
+
+# Sublime Text
+*.sublime-workspace
+*.sublime-project
+
+# Pipenv
+Pipfile.lock
+
+# Poetry
+pyproject.toml
+poetry.lock
+
+# Windows
+Thumbs.db
+ehthumbs.db
