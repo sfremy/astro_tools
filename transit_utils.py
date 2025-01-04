@@ -1,28 +1,7 @@
-import os
-import lmfit
-import warnings
-import csv
-import astropy
 import torch
-import scipy.fftpack
-
-import matplotlib.pyplot as plt
 import numpy as np
-import astropy.units as u
 import lightkurve as lk
-import pandas as pd
-
 import tensorflow as tf
-
-import transit_utils as utils
-
-from tensorflow.python.client import device_lib
-from wotan.gaps import get_gaps_indexes
-from tqdm.notebook import tqdm
-from time import process_time
-from os import listdir
-from os.path import join as opj
-from astropy.io import fits
 
 def pytorch_fold_and_bin(time, flux, period, n_bins, t0=0.0, device='cpu'):
     """
@@ -226,5 +205,36 @@ def split_lc(time, flux, other_arrs=None, time_gap_delta=0.75, flux_gap_delta=0.
     flux_chunks = np.array(flux_chunks, dtype=object)[valid_chunks]
     other_chunks = [[chunk for chunk, valid in zip(chunks, valid_chunks) if valid] for chunks in other_chunks]
 
-    return time_chunks, flux_chunks, other_chunks
+    return time_chunks, flux_chunks, other_chunks, split_ixs
 
+def perform_fft(data_raw):
+    #Required: raw dataset array data_raw
+    
+    #Re-center data array around 0
+    data = data_raw - np.mean(data_raw)
+    
+    #Perform FFT
+    fft_result = np.fft.fft(data)
+    # frequencies = np.fft.fftfreq(len(fft_result), 1)
+    
+    #Get magnitude of positive FFT portion
+    magnitude = np.abs(fft_result)
+    magnitude = magnitude[0:len(magnitude)//2]
+    
+    #Returns: complex ndarray (complex FFT) fft_result | array (frequency magnitude array) magnitude
+    return fft_result, magnitude
+
+def invert_fft(fft, fft_mag, bound):
+    #Required: complex FFT array fft, FFT magnitude array fft_mag, integer cutoff (in pixels post-peak) bound
+    
+    #Find cutoff using numpy argmax
+    bound_index = np.argmax(fft_mag) + bound
+    
+    #Cut FFT array 
+    fft[bound_index:-bound_index] = 0
+    
+    #Restore to original with upper degrees trimmed off
+    inverse = np.fft.ifft(fft)
+    
+    #Returns: complex ndarray (inverse reduced-degree FFT restoration) inverse
+    return inverse
