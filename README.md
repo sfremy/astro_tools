@@ -3,8 +3,9 @@
 A compilation of experimental Python tools for handling astrophysical data. The current contents comprise a pipeline for identifying circumbinary exoplanet transits in light curve data from Kepler. More projects will be added as time passes.
 
 ## Features
-- Cleans, detrends and searches for exoplanet transit signals in a given eclipsing binary's light curve.
-- Processes light curve catalogs and flags systems with signs of exoplanet transits.
+- Cleans, detrends and searches for exoplanet transit signals using Fourier decomposition. Can handle eclipsing binary targets with known periods.
+- Scans processed light curves and flags systems with signs of exoplanet transits.
+For a full explanation of Fourier decomposition & detrend, consult full_documentation.pdf.
 
 ## Installation
 Best results with Python 3.10 to ensure compatibility of Metal GPU functionality if on an Apple device.
