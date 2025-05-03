@@ -1,0 +1,29 @@
+# Query Description
+# Type of request:                 Extract data from a table
+# Name of the selected table:      sophiecc
+# Description of the table:        Cross-correlation functions
+# Object:                          HD166620
+# Display the fields:              seq,$link[objname],date,$link[slen],mask,ccf_offline,$field[rv],fwhm,span,maxcpp,contrast,lines,$link['view_head'],$link['get_ccf'],$link['view_ccf'],bjd
+# Description of each column
+# seq: ----------------- Sequence number
+# $link[objname]: ------ Designation of the object
+# date: ---------------- Observation date
+# $link[slen]: --------- Length of the series
+# mask: ---------------- Name of the mask
+# ccf_offline: --------- Offline CCF
+# $field[rv]: ---------- Radial velocity
+# fwhm: ---------------- FWHM of the correlation peak
+# span: ---------------- Bissector span
+# maxcpp: -------------- Maximum number of counts per pixel
+# contrast: ------------ Contrast of the CCF
+# lines: --------------- Number of lines used for the CCF
+# $link['view_head']: -- See the header of the cross-correlation file
+# $link['get_ccf']: ---- Download the cross-correlation function FITS file
+# $link['view_ccf']: --- View the cross-correlation function
+# bjd: ----------------- Barycentric Julian date
+#--- -------------- ---- ----------- ---- ----------- -- --- ---- ---- ------ -------- ----- ------------------ ---------------- ----------------- ---
+seq $link[objname] date $link[slen] mask ccf_offline rv err fwhm span maxcpp contrast lines $link['view_head'] $link['get_ccf'] $link['view_ccf'] bjd
+#--- -------------- ---- ----------- ---- ----------- -- --- ---- ---- ------ -------- ----- ------------------ ---------------- ----------------- ---
+2231310	HD166620	2017-06-20	   1	K5	0	-19.3221054077148	0.00126864	6.61721	0.00283333	2448	37.4434	6963	view_head	get_ccf	view_ccf	2457925.47918122
+#-- end of data table ----------------------------------------------------------
+# 1 lines were successfully retrieved
