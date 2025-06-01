@@ -68,16 +68,17 @@ def load_and_clean(kic, eb_df):
 
     Parameters:
         kic (int): Kepler Input Catalog index of the target.
-        eb_df (DataFrame): DataFrame containing eclipsing binary parameters, including period and primary eclipse times.
+        eb_df (DataFrame): MAST KeplerEBs data set.
 
     Returns:
-        lc (LightCurve): Cleaned light curve as a LightKurve object.
+        lc (LightCurve): Cleaned light curve.
         t (np.ndarray): Target time series.
         f (np.ndarray): Target flux intensity.
         ferr (np.ndarray): Target measurement uncertainty.
         p (float): Target eclipsing binary period in days.
         t0_1 (float): BKJD position of the primary eclipse in days.
     """
+
     # Load light curve
     search_result = lk.search_lightcurve(f'KIC {kic}', author='Kepler', exptime=1800)
     lc_collection = search_result.download_all(quality_bitmask="hard")
@@ -87,7 +88,7 @@ def load_and_clean(kic, eb_df):
     # Retrieve binary parameters
     params = eb_df.loc[eb_df['#KIC'] == kic]
     p = params['period'].item()
-    t0_1 = params['bjd0'].item() - 54833
+    t0_1 = params['bjd0'].item() - 54833 #Correction from MAST documentation.
 
     # Clean flux values using 5-sigma clipping
     f = lc.flux.value
@@ -114,6 +115,7 @@ def get_parameters(t, f, p, t0_1):
         dur_sec (float or None): Duration of the secondary eclipse in days. None if no secondary is detected.
         t0_2 (float or None): BKJD position of the secondary eclipse. None if no secondary is detected.
     """
+
     num = int(p * 48)  # Number of bins for folding
     sample_fold = pytorch_fold_and_bin(t, f, p, num, t0=t0_1 + p / 4, device='cpu')
     gradient = np.gradient(np.gradient(sample_fold))
