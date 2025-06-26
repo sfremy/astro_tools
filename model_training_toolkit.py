@@ -1,9 +1,6 @@
-import os
 import matplotlib.pyplot as plt
 import numpy as np
 import astropy
-from tensorflow.keras.models import load_model
-from tensorflow.python.client import device_lib
 
 
 def mk_set(postive_matrix, negative_matrix):
