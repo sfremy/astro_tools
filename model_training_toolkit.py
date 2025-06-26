@@ -77,3 +77,50 @@ def prep_matrix(protomatrix, n_sigma):
     matrix = p_final.reshape((p_final.shape[0], p_final.shape[1], 1))
     
     return matrix
+
+import tensorflow as tf
+from tensorflow.keras.saving import register_keras_serializable
+from tensorflow.keras.layers import Layer, Conv1D
+
+@register_keras_serializable()
+class CircularConv1D(Layer):
+    def __init__(self, filters, kernel_size, strides=1, activation='linear',
+                 padding='valid', kernel_initializer='glorot_uniform',
+                 kernel_regularizer=None, **kwargs):
+        super(CircularConv1D, self).__init__(**kwargs)
+        self.filters = filters
+        self.kernel_size = kernel_size
+        self.strides = strides
+        self.activation = tf.keras.activations.get(activation)
+        self.padding_mode = padding.lower()
+        self.kernel_initializer = kernel_initializer
+        self.kernel_regularizer = kernel_regularizer
+
+        self.conv = Conv1D(
+            filters=filters,
+            kernel_size=kernel_size,
+            strides=strides,
+            padding='valid',  # we'll handle padding manually
+            kernel_initializer=kernel_initializer,
+            kernel_regularizer=kernel_regularizer
+        )
+
+    def call(self, inputs):
+        if self.padding_mode == 'same':
+            pad = self.kernel_size // 2
+            # Wrap-around padding
+            inputs = tf.concat([inputs[:, -pad:, :], inputs, inputs[:, :pad, :]], axis=1)
+        return self.activation(self.conv(inputs))
+
+    def get_config(self):
+        config = super(CircularConv1D, self).get_config()
+        config.update({
+            'filters': self.filters,
+            'kernel_size': self.kernel_size,
+            'strides': self.strides,
+            'activation': tf.keras.activations.serialize(self.activation),
+            'padding': self.padding_mode,
+            'kernel_initializer': self.kernel_initializer,
+            'kernel_regularizer': self.kernel_regularizer,
+        })
+        return config
