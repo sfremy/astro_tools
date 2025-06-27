@@ -28,6 +28,17 @@ pip install ipykernel jupyterlab
 # ---- REGISTER JUPYTER KERNEL ----
 echo "Registering Jupyter kernel '$KERNEL_NAME'..."
 python -m ipykernel install --user --name="$KERNEL_NAME" --display-name "Python ($KERNEL_NAME)"
+echo "Updating notebook to use the myenv kernel..."
+python -c "
+import nbformat
+nb = nbformat.read(open('$NOTEBOOK'), as_version=4)
+nb['metadata']['kernelspec'] = {
+    'name': 'myenv',
+    'display_name': 'Python (myenv)',
+    'language': 'python'
+}
+nbformat.write(nb, open('$NOTEBOOK', 'w'))
+"
 
 # ---- LAUNCH JUPYTER WITH TARGET NOTEBOOK ----
 echo "Launching JupyterLab with $NOTEBOOK..."
