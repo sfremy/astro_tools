@@ -8,3 +8,4 @@ lightkurve==2.5.0
 pandas==2.2.3
 astropy==6.1.7
 astropy-iers-data==0.2024.12.30.0.33.36
+wotan==1.10.0
