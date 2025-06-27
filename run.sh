@@ -3,11 +3,12 @@
 # Exit on any error
 set -e
 
-# ---- CONFIGURATION ----
+# ---- CONFIG ----
 ENV_DIR=".venv"
 REQ_FILE="requirements.txt"
-ENTRY_SCRIPT="main.py"  # or whatever your script is
-PYTHON_BIN="python3"    # or specify full path if needed
+KERNEL_NAME="myenv"
+NOTEBOOK="prefold_automated.ipynb"
+PYTHON_BIN="python3"
 
 # ---- CREATE VENV ----
 if [ ! -d "$ENV_DIR" ]; then
@@ -18,11 +19,16 @@ fi
 # ---- ACTIVATE VENV ----
 source $ENV_DIR/bin/activate
 
-# ---- UPGRADE PIP AND INSTALL DEPENDENCIES ----
-echo "Installing dependencies from $REQ_FILE..."
+# ---- INSTALL DEPENDENCIES ----
+echo "Installing requirements..."
 pip install --upgrade pip
 pip install -r $REQ_FILE
+pip install ipykernel jupyterlab
 
-# ---- RUN YOUR SCRIPT ----
-echo "Running $ENTRY_SCRIPT..."
-python $ENTRY_SCRIPT
+# ---- REGISTER JUPYTER KERNEL ----
+echo "Registering Jupyter kernel '$KERNEL_NAME'..."
+python -m ipykernel install --user --name="$KERNEL_NAME" --display-name "Python ($KERNEL_NAME)"
+
+# ---- LAUNCH JUPYTER WITH TARGET NOTEBOOK ----
+echo "Launching JupyterLab with $NOTEBOOK..."
+jupyter lab "$NOTEBOOK"

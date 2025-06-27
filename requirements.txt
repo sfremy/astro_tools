@@ -8,3 +8,5 @@ wotan==1.5
 tensorflow==2.15.0
 scikit-learn==1.4.2
 lmfit==1.2.2
+ipykernel>=6.29
+jupyterlab>=4.1
