@@ -23,8 +23,16 @@ For dependencies, see requirements.txt.
 - TO EVALUATE TENSORFLOW MODEL PERFORMANCE ON REAL DATA:
     - Open prefold_automated.ipynb.
     - Run the first two cells.
-    - In the third cell, assign kic to the Kepler Input Catalog ID number of a star with circumbinary planets.
-        - KIC 12644769 (Kepler-16)
+    - In the third cell, assign kic to the Kepler Input Catalog ID number of a star with circumbinary planets:
+        - KIC 12351927 (Kepler-413)
+        - KIC 9632895 (Kepler-453)
+        - KIC 4862625 (Kepler-64)
+        - KIC 6504534 (Kepler-1661)
+        - KIC 6762829 (Kepler-38)
+        - KIC 10020423 (Kepler-47)
+    - Specify model name in the first cell of 'Evaluation' (only one model 'best_model.keras' at present).
+    - Run all cells.
+    - Last two cells will display confusion matrix and false/true positive/negative segments.
 
 ## File Structure
 ### 100K_foldless_trainingdata.npz
